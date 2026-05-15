@@ -8,11 +8,26 @@ class AdminProductBadgesController extends ModuleAdminController
 {
     public function __construct()
     {
+        // 1. Llamar al padre primero para evitar el error de Symfony "trans() on null"
+        parent::__construct();
+
+        // 2. Definición básica del controlador
         $this->table       = 'productbadges_badge';
         $this->className   = 'Badge';
         $this->lang        = true;
+        $this->bootstrap   = true;
+
+        // 3. SOLUCIÓN AL ERROR SQL: Definimos el ID y forzamos el orden
+        // Esto evita que PrestaShop busque 'id_configuration'
+        $this->identifier       = 'id_badge';
+        $this->_defaultOrderBy  = 'id_badge';
+        $this->_defaultOrderWay = 'ASC';
+
+        // Acciones de fila
         $this->addRowAction('edit');
         $this->addRowAction('delete');
+
+        // Acciones masivas
         $this->bulk_actions = [
             'delete' => [
                 'text'    => $this->l('Eliminar seleccionados'),
@@ -21,74 +36,69 @@ class AdminProductBadgesController extends ModuleAdminController
             ],
         ];
 
-        parent::__construct();
-
-        $this->bootstrap = true;
-    }
-
-    /**
-     * Columnas del listado de badges (HelperList)
-     */
-    public function initContent(): void
-    {
+        // Definición de las columnas del listado (HelperList)
         $this->fields_list = [
             'id_badge' => [
                 'title' => $this->l('ID'),
-                'width' => 30,
+                'align' => 'center',
+                'class' => 'fixed-width-xs',
             ],
             'label' => [
                 'title' => $this->l('Texto'),
-                'width' => 200,
+                'width' => 'auto',
                 'lang'  => true,
             ],
             'position' => [
                 'title' => $this->l('Posición'),
-                'width' => 100,
+                'type'  => 'select',
+                'list'  => [
+                    'top-left'  => $this->l('Superior izquierda'),
+                    'top-right' => $this->l('Superior derecha'),
+                ],
+                'filter_key' => 'a!position',
             ],
             'bg_color' => [
                 'title'    => $this->l('Color fondo'),
-                'width'    => 80,
                 'callback' => 'renderColor',
+                'search'   => false,
             ],
             'text_color' => [
                 'title'    => $this->l('Color texto'),
-                'width'    => 80,
                 'callback' => 'renderColor',
+                'search'   => false,
             ],
             'active' => [
                 'title'   => $this->l('Activo'),
                 'active'  => 'status',
                 'type'    => 'bool',
+                'align'   => 'center',
+                'class'   => 'fixed-width-sm',
                 'orderby' => false,
             ],
         ];
-
-        parent::initContent();
     }
 
     /**
-     * Callback para mostrar el color como una pastilla visual en el listado.
+     * Callback para mostrar el color visualmente en el listado.
      */
-    public function renderColor(string $value, array $row): string
+    public function renderColor($value, $row)
     {
         $safeValue = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
-        return '<span style="display:inline-block;width:20px;height:20px;background:'
+        return '<span style="display:inline-block;width:18px;height:18px;background:'
             . $safeValue
-            . ';border:1px solid #ccc;border-radius:3px;" title="'
-            . $safeValue
-            . '"></span> '
+            . ';border:1px solid #ccc;border-radius:3px;vertical-align:middle;margin-right:5px;"></span> '
             . $safeValue;
     }
 
     /**
      * Formulario de creación/edición de una badge (HelperForm)
      */
-    public function renderForm(): string
+    public function renderForm()
     {
         $this->fields_form = [
             'legend' => [
-                'title' => $this->l('Badge'),
+                'title' => $this->l('Configuración de la Badge'),
                 'icon'  => 'icon-tag',
             ],
             'input' => [
@@ -127,6 +137,7 @@ class AdminProductBadgesController extends ModuleAdminController
                     'type'   => 'switch',
                     'label'  => $this->l('Activo'),
                     'name'   => 'active',
+                    'is_bool' => true,
                     'values' => [
                         ['id' => 'active_on',  'value' => 1, 'label' => $this->l('Sí')],
                         ['id' => 'active_off', 'value' => 0, 'label' => $this->l('No')],
@@ -138,6 +149,7 @@ class AdminProductBadgesController extends ModuleAdminController
             ],
         ];
 
+        // Bloque personalizado para asignar productos
         $this->tpl_form_vars['products_block'] = $this->renderProductsAssignBlock();
 
         return parent::renderForm();
@@ -146,7 +158,7 @@ class AdminProductBadgesController extends ModuleAdminController
     /**
      * Genera el HTML del bloque de asignación de productos.
      */
-    private function renderProductsAssignBlock(): string
+    private function renderProductsAssignBlock()
     {
         $idBadge     = (int) Tools::getValue('id_badge');
         $assignedIds = $idBadge ? Badge::getProductIdsByBadge($idBadge) : [];
@@ -154,11 +166,9 @@ class AdminProductBadgesController extends ModuleAdminController
         $products = Product::getProducts(
             (int) $this->context->language->id,
             0,
-            0,
+            100, // Límite de seguridad
             'name',
-            'ASC',
-            false,
-            true
+            'ASC'
         );
 
         $this->context->smarty->assign([
@@ -172,49 +182,30 @@ class AdminProductBadgesController extends ModuleAdminController
     }
 
     /**
-     * Sobreescribimos postProcess para guardar también
-     * las asignaciones de productos al hacer submit.
+     * Gestión del guardado de relaciones N:M
      */
-    public function postProcess(): void
+    public function postProcess()
     {
         parent::postProcess();
 
         if (Tools::isSubmit('submitAddproductbadges_badge') || Tools::isSubmit('submitAddproductbadges_badgeAndStay')) {
             $idBadge = (int) Tools::getValue('id_badge');
+            
+            // Si es nuevo, recuperamos el ID del objeto recién creado
+            if (!$idBadge && isset($this->object->id)) {
+                $idBadge = (int) $this->object->id;
+            }
 
             if ($idBadge) {
-                $rawIds     = Tools::getValue('product_ids', '');
-                $productIds = $this->sanitizeProductIds($rawIds);
-                Badge::saveProductAssignments($idBadge, $productIds);
+                $productIds = Tools::getValue('product_ids');
+                $cleanIds = is_array($productIds) ? array_map('intval', $productIds) : [];
+                Badge::saveProductAssignments($idBadge, $cleanIds);
             }
         }
     }
 
     /**
-     * Valida que los ids de producto sean enteros positivos.
-     */
-    private function sanitizeProductIds(string $raw): array
-    {
-        if (empty($raw)) {
-            return [];
-        }
-
-        $ids   = explode(',', $raw);
-        $clean = [];
-
-        foreach ($ids as $id) {
-            $id = (int) trim($id);
-            if ($id > 0) {
-                $clean[] = $id;
-            }
-        }
-
-        return array_unique($clean);
-    }
-
-    /**
-     * Validación server-side antes de guardar.
-     * Firma compatible con AdminControllerCore::validateRules()
+     * Validación server-side
      */
     public function validateRules($class_name = false)
     {
