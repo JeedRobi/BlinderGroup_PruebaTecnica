@@ -1,0 +1,8 @@
+.productbadges-product-list label {
+    display: block;
+    padding: 2px 0;
+}
+
+.productbadges-search-wrap input {
+    max-width: 300px;
+}

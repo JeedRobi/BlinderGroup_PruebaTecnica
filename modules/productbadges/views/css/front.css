@@ -1,0 +1,29 @@
+.productbadges-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+}
+
+.productbadges-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 3px;
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.productbadges-top-left {
+    align-self: flex-start;
+}
+
+.productbadges-top-right {
+    align-self: flex-end;
+}

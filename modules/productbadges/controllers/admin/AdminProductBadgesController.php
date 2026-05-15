@@ -18,7 +18,6 @@ class AdminProductBadgesController extends ModuleAdminController
         $this->bootstrap   = true;
 
         // 3. SOLUCIÓN AL ERROR SQL: Definimos el ID y forzamos el orden
-        // Esto evita que PrestaShop busque 'id_configuration'
         $this->identifier       = 'id_badge';
         $this->_defaultOrderBy  = 'id_badge';
         $this->_defaultOrderWay = 'ASC';
@@ -101,9 +100,31 @@ class AdminProductBadgesController extends ModuleAdminController
      */
     public function renderForm()
     {
+        $idBadge = (int) Tools::getValue('id_badge');
+        $assignedIds = $idBadge ? Badge::getProductIdsByBadge($idBadge) : [];
+
+        // Cargamos todos los productos para el buscador
+        $products = Product::getProducts(
+            (int) $this->context->language->id,
+            0,
+            0,
+            'name',
+            'ASC'
+        );
+
+        $this->context->smarty->assign([
+            'products'    => $products,
+            'assignedIds' => $assignedIds,
+        ]);
+
+        // Generamos el bloque HTML de búsqueda y selección (assign.tpl)
+        $productsBlock = $this->context->smarty->fetch(
+            _PS_MODULE_DIR_ . 'productbadges/views/templates/admin/assign.tpl'
+        );
+
         $this->fields_form = [
             'legend' => [
-                'title' => $this->l('Configuración de la Badge'),
+                'title' => $this->l('Badge'),
                 'icon'  => 'icon-tag',
             ],
             'input' => [
@@ -142,11 +163,16 @@ class AdminProductBadgesController extends ModuleAdminController
                     'type'   => 'switch',
                     'label'  => $this->l('Activo'),
                     'name'   => 'active',
-                    'is_bool' => true,
                     'values' => [
                         ['id' => 'active_on',  'value' => 1, 'label' => $this->l('Sí')],
                         ['id' => 'active_off', 'value' => 0, 'label' => $this->l('No')],
                     ],
+                ],
+                // Inyectamos el buscador de productos dentro del formulario
+                [
+                    'type' => 'free',
+                    'label' => $this->l('Productos asignados'),
+                    'name' => 'products_assign_block',
                 ],
             ],
             'submit' => [
@@ -154,36 +180,9 @@ class AdminProductBadgesController extends ModuleAdminController
             ],
         ];
 
-        // Bloque personalizado para asignar productos
-        $this->tpl_form_vars['products_block'] = $this->renderProductsAssignBlock();
+        $this->fields_value['products_assign_block'] = $productsBlock;
 
         return parent::renderForm();
-    }
-
-    /**
-     * Genera el HTML del bloque de asignación de productos.
-     */
-    private function renderProductsAssignBlock()
-    {
-        $idBadge     = (int) Tools::getValue('id_badge');
-        $assignedIds = $idBadge ? Badge::getProductIdsByBadge($idBadge) : [];
-
-        $products = Product::getProducts(
-            (int) $this->context->language->id,
-            0,
-            100, // Límite de seguridad
-            'name',
-            'ASC'
-        );
-
-        $this->context->smarty->assign([
-            'products'    => $products,
-            'assignedIds' => $assignedIds,
-        ]);
-
-        return $this->context->smarty->fetch(
-            _PS_MODULE_DIR_ . 'productbadges/views/templates/admin/assign.tpl'
-        );
     }
 
     /**
@@ -191,26 +190,34 @@ class AdminProductBadgesController extends ModuleAdminController
      */
     public function postProcess()
     {
+        // Guardar primero los datos básicos del objeto Badge
         parent::postProcess();
 
         if (Tools::isSubmit('submitAddproductbadges_badge') || Tools::isSubmit('submitAddproductbadges_badgeAndStay')) {
             $idBadge = (int) Tools::getValue('id_badge');
             
-            // Si es nuevo, recuperamos el ID del objeto recién creado
+            // Si es nuevo, recuperamos el ID tras el parent::postProcess()
             if (!$idBadge && isset($this->object->id)) {
                 $idBadge = (int) $this->object->id;
             }
 
             if ($idBadge) {
-                $productIds = Tools::getValue('product_ids');
-                $cleanIds = is_array($productIds) ? array_map('intval', $productIds) : [];
+                // Tu back.js envía los IDs como un string separado por comas en el input hidden 'product_ids'
+                $productIdsString = Tools::getValue('product_ids');
+                $cleanIds = [];
+                
+                if (!empty($productIdsString)) {
+                    $cleanIds = array_map('intval', explode(',', $productIdsString));
+                }
+
+                // Llamamos a la lógica de guardado de tu modelo Badge
                 Badge::saveProductAssignments($idBadge, $cleanIds);
             }
         }
     }
 
     /**
-     * Validación server-side
+     * Validación server-side (Tu lógica original)
      */
     public function validateRules($class_name = false)
     {
