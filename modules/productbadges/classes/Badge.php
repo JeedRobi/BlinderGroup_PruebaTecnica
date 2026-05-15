@@ -64,13 +64,20 @@ class Badge extends ObjectModel
      */
     public static function getActiveBadges(int $idLang): array
     {
+        $defaultLang = (int) Configuration::get('PS_LANG_DEFAULT');
+
         $sql = new DbQuery();
-        $sql->select('b.*, bl.label');
+        $sql->select('b.*, COALESCE(bl.label, bll.label) AS label');
         $sql->from('productbadges_badge', 'b');
         $sql->leftJoin(
             'productbadges_badge_lang',
             'bl',
-            'b.id_badge = bl.id_badge AND bl.id_lang = ' . (int) $idLang
+            'b.id_badge = bl.id_badge AND bl.id_lang = ' . $idLang
+        );
+        $sql->leftJoin(
+            'productbadges_badge_lang',
+            'bll',
+            'b.id_badge = bll.id_badge AND bll.id_lang = ' . $defaultLang
         );
         $sql->where('b.active = 1');
 
@@ -83,8 +90,10 @@ class Badge extends ObjectModel
      */
     public static function getBadgesForProduct(int $idProduct, int $idLang, int $maxBadges): array
     {
+        $defaultLang = (int) Configuration::get('PS_LANG_DEFAULT');
+
         $sql = new DbQuery();
-        $sql->select('b.*, bl.label');
+        $sql->select('b.*, COALESCE(bl.label, bll.label) AS label');
         $sql->from('productbadges_badge', 'b');
         $sql->innerJoin(
             'productbadges_badge_product',
@@ -94,7 +103,12 @@ class Badge extends ObjectModel
         $sql->leftJoin(
             'productbadges_badge_lang',
             'bl',
-            'b.id_badge = bl.id_badge AND bl.id_lang = ' . (int) $idLang
+            'b.id_badge = bl.id_badge AND bl.id_lang = ' . $idLang
+        );
+        $sql->leftJoin(
+            'productbadges_badge_lang',
+            'bll',
+            'b.id_badge = bll.id_badge AND bll.id_lang = ' . $defaultLang
         );
         $sql->where('b.active = 1');
         $sql->limit((int) $maxBadges);

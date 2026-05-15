@@ -27,6 +27,11 @@ class AdminProductBadgesController extends ModuleAdminController
         $this->addRowAction('edit');
         $this->addRowAction('delete');
 
+        // Forzar el join de la tabla lang para que el listado use el idioma activo
+        $this->_select = 'al.label';
+        $this->_join = 'LEFT JOIN `' . _DB_PREFIX_ . 'productbadges_badge_lang` al'
+            . ' ON (a.id_badge = al.id_badge AND al.id_lang = ' . (int) $this->context->language->id . ')';
+
         // Acciones masivas
         $this->bulk_actions = [
             'delete' => [
