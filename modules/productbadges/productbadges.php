@@ -24,6 +24,22 @@ class ProductBadges extends Module
         $this->displayName = $this->l('Product Badges');
         $this->description = $this->l('Gestión de etiquetas visuales reutilizables para productos del catálogo.');
         $this->confirmUninstall = $this->l('¿Seguro que quieres desinstalar el módulo? Se perderán todas las badges.');
+
+        // Asegurar que hooks comunes están registrados (útil si el tema usa hooks diferentes)
+        $additionalHooks = [
+            'displayProductListFunctionalButtons',
+            'displayProductListReviews',
+            'displayProductList',
+            'displayProductListItem',
+            'displayProductImage',
+        ];
+
+        foreach ($additionalHooks as $hookName) {
+            if (!Hook::getIdByName($hookName) || !$this->isRegisteredInHook($hookName)) {
+                // registerHook silente: si ya está registrado no duplica
+                @$this->registerHook($hookName);
+            }
+        }
     }
 
     /**
@@ -252,6 +268,13 @@ class ProductBadges extends Module
             'modules/' . $this->name . '/views/css/front.css',
             ['media' => 'all', 'priority' => 150]
         );
+
+        // Registrar pequeño JS que reposiciona badges dentro de la imagen en ficha
+        $this->context->controller->registerJavascript(
+            'productbadges-front-js',
+            'modules/' . $this->name . '/views/js/front.js',
+            ['position' => 'bottom', 'priority' => 150]
+        );
     }
 
     /**
@@ -270,34 +293,75 @@ class ProductBadges extends Module
     /**
      * Hook para listado de categoría y resultados de búsqueda.
      */
-    public function hookDisplayProductListingProductItem(array $params): string
-    {
-        if (!Configuration::get('PRODUCTBADGES_ENABLED')) {
-            return '';
+public function hookDisplayProductListingProductItem(array $params): string
+{
+    // 1. Verificación básica
+    if (!Configuration::get('PRODUCTBADGES_ENABLED') || !Configuration::get('PRODUCTBADGES_SHOW_LISTING')) {
+        return '';
+    }
+    
+
+    // 2. Detección robusta del ID del producto (varía según el tema/hook)
+    $idProduct = 0;
+    if (is_array($params) && isset($params['product'])) {
+        if (isset($params['product']['id_product'])) {
+            $idProduct = (int) $params['product']['id_product'];
+        } elseif (isset($params['product']['id'])) {
+            $idProduct = (int) $params['product']['id'];
         }
-
-        if (!Configuration::get('PRODUCTBADGES_SHOW_LISTING')) {
-            return '';
+    } elseif (is_object($params) && isset($params->product)) {
+        if (is_object($params->product) && property_exists($params->product, 'id')) {
+            $idProduct = (int) $params->product->id;
         }
-
-        $idProduct = (int) $params['product']['id_product'];
-        $idLang    = (int) $this->context->language->id;
-        $maxBadges = (int) Configuration::get('PRODUCTBADGES_MAX_BADGES');
-
-        $badges = Badge::getBadgesForProduct($idProduct, $idLang, $maxBadges);
-
-        if (empty($badges)) {
-            return '';
-        }
-
-        $this->context->smarty->assign(['badges' => $badges]);
-
-        return $this->fetch('module:productbadges/views/templates/front/badge.tpl');
     }
 
+    if (!$idProduct) {
+        return ''; // Sin ID no podemos continuar
+    }
+
+    $idLang = (int) $this->context->language->id;
+    $max = (int) Configuration::get('PRODUCTBADGES_MAX_BADGES');
+
+    // 3. Obtener badges
+    $badges = Badge::getBadgesForProduct($idProduct, $idLang, $max);
+
+    if (empty($badges)) {
+        return '';
+    }
+
+    $this->context->smarty->assign(['badges' => $badges]);
+
+    // 4. Renderizar la plantilla del módulo
+    return $this->display(__FILE__, 'views/templates/front/badge.tpl');
+}
     /**
-     * Hook para la ficha de producto.
+     * Compatibilidad con hooks de listados alternativos que usan algunos temas.
+     * Todos reenvían al método principal para evitar duplicación.
      */
+    public function hookDisplayProductList(array $params): string
+    {
+        return $this->hookDisplayProductListingProductItem($params);
+    }
+
+    public function hookDisplayProductListItem(array $params): string
+    {
+        return $this->hookDisplayProductListingProductItem($params);
+    }
+
+    public function hookDisplayProductListFunctionalButtons(array $params): string
+    {
+        return $this->hookDisplayProductListingProductItem($params);
+    }
+
+    public function hookDisplayProductImage(array $params): string
+    {
+        return $this->hookDisplayProductListingProductItem($params);
+    }
+
+    public function hookDisplayProductListReviews(array $params): string
+    {
+        return $this->hookDisplayProductListingProductItem($params);
+    }
     public function hookDisplayProductAdditionalInfo(array $params): string
     {
         if (!Configuration::get('PRODUCTBADGES_ENABLED')) {
@@ -308,7 +372,26 @@ class ProductBadges extends Module
             return '';
         }
 
-        $idProduct = (int) $params['product']['id'];
+        // Detección robusta del id del producto en la ficha
+        $idProduct = 0;
+        if (is_array($params) && isset($params['product'])) {
+            if (isset($params['product']['id'])) {
+                $idProduct = (int) $params['product']['id'];
+            } elseif (isset($params['product']['id_product'])) {
+                $idProduct = (int) $params['product']['id_product'];
+            }
+        } elseif (is_object($params) && isset($params->product)) {
+            if (is_object($params->product) && property_exists($params->product, 'id')) {
+                $idProduct = (int) $params->product->id;
+            } elseif (is_object($params->product) && method_exists($params->product, 'getId')) {
+                $idProduct = (int) $params->product->getId();
+            }
+        }
+
+        if (!$idProduct) {
+            return '';
+        }
+
         $idLang    = (int) $this->context->language->id;
         $maxBadges = (int) Configuration::get('PRODUCTBADGES_MAX_BADGES');
 
@@ -320,6 +403,6 @@ class ProductBadges extends Module
 
         $this->context->smarty->assign(['badges' => $badges]);
 
-        return $this->fetch('module:productbadges/views/templates/front/badge.tpl');
+        return $this->display(__FILE__, 'views/templates/front/badge.tpl');
     }
 }

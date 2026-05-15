@@ -1,29 +1,65 @@
+/* Forzar al contenedor del producto a ser punto de referencia (suficientemente genérico) */
+.product-miniature,
+.thumbnail-container,
+.product,
+.product-card,
+.product-thumbnail {
+    position: relative !important;
+}
+
+/* Asegurar que el enlace que contiene la imagen es punto de referencia */
+.thumbnail.product-thumbnail,
+.thumbnail.product-thumbnail img,
+.product-media,
+.product-media img {
+    position: relative !important;
+}
+
 .productbadges-wrapper {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 6px;
+    position: absolute !important;
+    top: 6px !important;
+    left: 6px !important;
+    z-index: 999 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    pointer-events: none;
 }
 
 .productbadges-badge {
-    display: inline-block;
-    padding: 3px 8px;
-    font-size: 11px;
+    pointer-events: auto;
+    background-color: #c00; /* fallback if inline style missing */
+    color: #fff;
+    padding: 3px 10px;
     font-weight: 700;
-    border-radius: 3px;
-    line-height: 1.4;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    display: block !important;
+    border-radius: 3px;
 }
 
-.productbadges-top-left {
-    align-self: flex-start;
+/* Hide original wrapper after we clone+move it into the thumbnail */
+.productbadges-original-hidden { display: none !important; }
+
+.productbadges-cloned { position: absolute !important; top: 6px !important; left: 6px !important; z-index: 999 !important; display: flex !important; flex-direction: column !important; gap: 6px !important; pointer-events: none; }
+
+/* cloned variant specifically for top-right inside thumbnail */
+.productbadges-cloned--top-right { position: absolute !important; top: 6px !important; right: 6px !important; left: auto !important; }
+
+/* Position badges inside the product flags list (below the NEW flag) */
+.product-flags { position: absolute !important; top: 6px !important; left: 6px !important; right: 6px !important; z-index: 999 !important; padding: 0 !important; margin: 0 !important; display: flex !important; gap: 6px !important; align-items: flex-start !important; }
+.product-flags li { list-style: none; }
+.productbadges-flag-item { margin-top: 6px; display: inline-flex; gap: 6px; align-items: center; }
+.productbadges-flag-item .productbadges-badge { display: inline-block !important; pointer-events: auto; }
+.productbadges-flag-item--top-right { margin-left: auto !important; }
+.productbadges-flag-item--top-left { margin-left: 0 !important; }
+
+/* Si la badge está configurada para la esquina derecha, la alineamos a la derecha */
+.productbadges-badge.productbadges-top-right {
+    align-self: flex-end !important;
 }
 
-.productbadges-top-right {
-    align-self: flex-end;
+/* Ajustes responsivos: reducir tamaño en móviles */
+@media (max-width: 480px) {
+    .productbadges-badge { font-size: 10px; padding: 2px 6px; }
 }
